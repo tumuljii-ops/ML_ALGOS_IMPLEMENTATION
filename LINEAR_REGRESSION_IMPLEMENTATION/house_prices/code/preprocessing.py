@@ -182,6 +182,9 @@ lr=0.01
 
 epoch=2000
 
+#ridge regularisation 
+lam=0.1
+
 for i in range (epoch):
     
     Y_pred=np.dot(X_train_final,w)
@@ -191,6 +194,9 @@ for i in range (epoch):
     
     #gradient
     grad=(2/n_sample)*np.dot(X_train_final.T,error)
+    
+    # add ridge penalty gradient (skip bias term w[0])
+    grad[1:] = grad[1:] + (2.0 * lam * w[1:])
     
     #update weights
     w=w-lr*grad
