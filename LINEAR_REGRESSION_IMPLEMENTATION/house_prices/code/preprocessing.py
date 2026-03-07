@@ -224,6 +224,124 @@ rmse=np.sqrt(mse)
 print("validation mse:",mse)
 print("validation rmse:",rmse)
 
+#------using grid seach for hypermeter tuning----------
+
+import numpy as np
+
+def ridge_train_and_rmse(X_train, y_train, X_val, y_val, lam, lr, epochs):
+    n_samples = X_train.shape[0]
+    n_features = X_train.shape[1]
+
+    w = np.zeros(n_features, dtype=np.float64)
+
+    for _ in range(epochs):
+        y_pred = np.dot(X_train, w)
+        error = y_pred - y_train
+
+        grad = (2.0 / n_samples) * np.dot(X_train.T, error)
+
+        # ridge penalty (skip bias term w[0])
+        grad[1:] += 2.0 * lam * w[1:]
+
+        w = w - lr * grad
+
+    # validation rmse
+    val_pred = np.dot(X_val, w)
+    val_mse = np.mean((val_pred - y_val) ** 2)
+    val_rmse = np.sqrt(val_mse)
+
+    return val_rmse, w
+
+#---------------grid search----------------
+lambdas = [0.0, 0.0001, 0.001, 0.01, 0.1, 1.0]
+lrs     = [0.001, 0.003, 0.01]
+epochs_list = [1000, 2000, 4000]
+
+best_rmse = float("inf")
+best_params = None
+best_w = None
+
+for lam in lambdas:
+    for lr in lrs:
+        for epochs in epochs_list:
+            rmse, w = ridge_train_and_rmse(
+                X_train_final, Y_train_np,
+                X_val_final, Y_val_np,
+                lam, lr, epochs
+            )
+
+            print("lam:", lam, "lr:", lr, "epochs:", epochs, "rmse:", rmse)
+
+            if rmse < best_rmse:
+                best_rmse = rmse
+                best_params = (lam, lr, epochs)
+                best_w = w
+
+print("\nBEST RMSE:", best_rmse)
+print("BEST params (lam, lr, epochs):", best_params)
+
+#---------final training + prediction +submission--------
+
+import numpy as np
+import pandas as pd
+
+# combine train + validation
+X_full = np.vstack((X_train_final, X_val_final))
+Y_full = np.concatenate((Y_train_np, Y_val_np))
+
+n_samples = X_full.shape[0]
+n_features = X_full.shape[1]
+
+# best hyperparameters
+lam = 0.1
+lr = 0.01
+epochs = 4000
+
+# initialize weights
+w = np.zeros(n_features, dtype=np.float64)
+
+# training loop (ridge regression)
+for i in range(epochs):
+
+    y_pred = np.dot(X_full, w)
+
+    error = y_pred - Y_full
+
+    grad = (2.0 / n_samples) * np.dot(X_full.T, error)
+
+    # ridge penalty (skip bias)
+    grad[1:] += 2 * lam * w[1:]
+
+    w = w - lr * grad
+
+# prepare test dataset (must match X columns exactly)
+test_features = test[X.columns]
+X_test = test_features.to_numpy(dtype=np.float64)
+
+# scale using train statistics
+X_test_scaled = (X_test - mean) / std
+
+# add bias column
+n_test = X_test_scaled.shape[0]
+ones_test = np.ones((n_test, 1))
+X_test_final = np.hstack((ones_test, X_test_scaled))
+
+# prediction (log price)
+Y_test_log_pred = np.dot(X_test_final, w)
+
+# convert back to real price
+Y_test_pred = np.expm1(Y_test_log_pred)
+
+# create submission file
+submission = pd.DataFrame({
+    "Id": test["Id"],
+    "SalePrice": Y_test_pred
+})
+
+submission.to_csv("submission.csv", index=False)
+
+print("Submission file created successfully!")
+
 
 
 
